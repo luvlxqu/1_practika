@@ -1,0 +1,82 @@
+{
+  "name": "Monolith Dev Env",
+
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/itsmechlark/features/postgresql:1": {
+      "version": "15"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": "false"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+  "containerEnv": {
+    "DATABASE_URL": "postgresql://postgres@localhost:5432/postgres",
+    "FLASK_APP": "backend/run.py",
+    "FLASK_DEBUG": "1",
+    "NODE_ENV": "development",
+    "VITE_API_URL": "http://localhost:5000"
+  },
+  "postCreateCommand": "chmod +x ./.devcontainer/welcome.sh && npm install --prefix frontend && pip install -r backend/requirements.txt && echo './.devcontainer/welcome.sh' >> ~/.bashrc",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+          }
+        },
+        "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[vue]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[html]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "sqltools.connections": [
+          {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "Dev Server",
+            "database": "postgres",
+            "username": "postgres",
+            "password": ""
+          }
+        ]
+      },
+      "extensions": [
+        "-ms-ossdata.vscode-pgsql",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "christian-kohler.path-intellisense",
+        "Vue.volar",
+        "bradlc.vscode-tailwindcss",
+        "stivo.tailwind-fold"
+      ]
+    }
+  },
+
+  "forwardPorts": [5173, 5000, 5432],
+  "portsAttributes": {
+    "5173": { "label": "Vite Frontend", "onAutoForward": "notify" },
+    "5000": { "label": "Flask Backend", "onAutoForward": "notify" },
+    "5432": { "label": "Postgres Server", "onAutoForward": "silent" }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  }
+}
