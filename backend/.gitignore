@@ -1,0 +1,23 @@
+
+# ====== Безопасность ======
+# Переменные окружения
+.env
+.env.local
+.env.*.local
+*.env
+
+# Секреты и ключи
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+
+# Базы данных
+*.db
+*.sqlite
+instance/
+
+# Логи
+*.log
+logs/

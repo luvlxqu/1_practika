@@ -1,0 +1,46 @@
+# System files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Docker & Logs
+*.log
+.docker/
+docker-compose.override.yml
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+__pycache__/
+.venv/
+.pytest_cache/
+# ====== Безопасность ======
+# Переменные окружения
+.env
+.env.local
+.env.*.local
+*.env
+
+# Секреты и ключи
+*.pem
+*.key
+*.crt
+secrets/
+credentials.json
+
+# Базы данных
+*.db
+*.sqlite
+instance/
+
+# Логи
+*.log
+logs/
