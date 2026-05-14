@@ -1,0 +1,321 @@
+"""Модуль моделей базы данных SQLAlchemy."""
+
+from datetime import datetime
+
+from sqlalchemy import inspect
+
+from app.extension import db
+
+
+# MEMBER
+class Member(db.Model):
+    """Модель участника системы (пользователь с ролью)."""
+    __tablename__ = "member"
+
+    id = db.Column(db.Integer, primary_key=True)
+    auth_id = db.Column(db.String, unique=True, nullable=False)  # Logto sub
+    timezone = db.Column(db.String(32), server_default="UTC")
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    email = db.Column(
+        db.String(64), nullable=True
+    )  #!!! не забыть переключить на False !!!
+
+    roles = db.relationship("MemberRole", back_populates="member")
+    specialist = db.relationship("Specialist", uselist=False, back_populates="member")
+    client = db.relationship("Client", uselist=False, back_populates="member")
+
+
+# ROLES
+class Role(db.Model):
+    """Модель роли пользователя (client, specialist, admin, moderator)."""
+    __tablename__ = "role"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(16), unique=True)
+    label = db.Column(db.String(32))
+
+
+def seed_role():
+    """Заполнение таблицы ролей начальными значениями (client, specialist, admin, moderator)."""
+    
+    inspector = inspect(db.engine)
+    if "role" not in inspector.get_table_names():
+        return  # таблицы ещё нет — выходим
+
+    # Создадим дефолтные роли
+    roles_data = [
+        {"code": "client", "label": "Клиент"},
+        {"code": "specialist", "label": "Специалист"},
+        {"code": "moderator", "label": "Модератор"},
+        {"code": "admin", "label": "Администратор"},
+        {"code": "owner", "label": "Владелец"},
+    ]
+
+    for role_info in roles_data:
+        role = Role.query.filter_by(code=role_info["code"]).first()
+        if not role:
+            new_role = Role(code=role_info["code"], label=role_info["label"])
+            db.session.add(new_role)
+    db.session.commit()
+
+
+class MemberRole(db.Model):
+    """Модель связи участника и роли (многие ко многим)."""
+    __tablename__ = "member_role"
+
+    member_id = db.Column(db.Integer, db.ForeignKey("member.id"), primary_key=True)
+    role_id = db.Column(db.Integer, db.ForeignKey("role.id"), primary_key=True)
+
+    is_active = db.Column(db.Boolean, default=True)
+    assigned_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    member = db.relationship("Member", back_populates="roles")
+    role = db.relationship("Role")
+
+
+# CLIENT / SPECIALIST
+class Specialist(db.Model):
+    """Модель профиля специалиста."""
+    __tablename__ = "specialist"
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("member.id"), unique=True)
+
+    photo_url = db.Column(db.String)
+    first_name = db.Column(db.String(32))
+    last_name = db.Column(db.String(32))
+    specialization = db.Column(db.String(64))
+    education = db.Column(db.String(64))
+    bio = db.Column(db.Text)
+    experience_years = db.Column(db.Integer)
+    base_price = db.Column(db.Integer, nullable=True, server_default="1500")
+    verification_status = db.Column(db.String(20), default="pending")
+    is_approved = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reject_reason = db.Column(db.String, nullable=True)
+
+    member = db.relationship("Member", back_populates="specialist")
+    slots = db.relationship("Slot", back_populates="specialist")
+    documents = db.relationship("SpecialistDocuments", back_populates="specialist")
+
+
+class SpecialistDocuments(db.Model):
+    """Модель документов специалиста."""
+    __tablename__ = "specialistdocument"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    verified_by = db.Column(db.Integer, db.ForeignKey("member.id"))
+    specialist_id = db.Column(db.Integer, db.ForeignKey("specialist.id"))
+
+    document_title = db.Column(db.String(64), nullable=False)
+    file_url = db.Column(db.String, nullable=False)
+
+    is_active = db.Column(db.Boolean, default=True)
+    uploaded_time = db.Column(db.DateTime, default=datetime.utcnow)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    verification_status = db.Column(db.String(32), nullable=False)
+    origin_name = db.Column(db.String(255))
+    reject_reason = db.Column(db.String, nullable=True)
+
+    # связи
+    specialist = db.relationship("Specialist", back_populates="documents")
+
+    def __repr__(self):
+        return f"<Document {self.title}>"
+
+
+class Review(db.Model):
+    """Модель отзыва о специалисте."""
+    __tablename__ = "review"
+
+    id = db.Column(db.Integer, primary_key=True)
+    appointment_id = db.Column(
+        db.Integer, db.ForeignKey("appointment.id"), unique=True, nullable=False
+    )
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
+    specialist_id = db.Column(
+        db.Integer, db.ForeignKey("specialist.id"), nullable=False
+    )
+    rating = db.Column(db.Integer, nullable=False)  # 1–5
+    comment = db.Column(db.Text, nullable=True)
+    is_approved = db.Column(db.Boolean, default=False)  # после модерации
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # связи
+    appointment = db.relationship(
+        "Appointment", backref=db.backref("review", uselist=False)
+    )
+    client = db.relationship("Client", backref="reviews")
+    specialist = db.relationship("Specialist", backref="reviews")
+
+
+class Client(db.Model):
+    """Модель профиля клиента."""
+    __tablename__ = "client"
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("member.id"), unique=True)
+
+    avatar_url = db.Column(db.String)
+    display_name = db.Column(db.String(64))
+    bio = db.Column(db.Text)
+    is_anonymous = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    member = db.relationship("Member", back_populates="client")
+    appointments = db.relationship("Appointment", back_populates="client")
+
+
+# TAGS (ISSUE / METHOD)
+class Issue(db.Model):
+    """Модель проблемы/обращения."""
+    __tablename__ = "issue"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(16), unique=True)
+    label = db.Column(db.String(64))
+
+
+class SpecialistIssue(db.Model):
+    """Модель специализации по проблемам."""
+    __tablename__ = "specialist_issue"
+
+    specialist_id = db.Column(
+        db.Integer, db.ForeignKey("specialist.id", ondelete="CASCADE"), primary_key=True
+    )
+    issue_id = db.Column(db.Integer, db.ForeignKey("issue.id"), primary_key=True)
+
+
+class Method(db.Model):
+    """Модель метода терапии."""
+    __tablename__ = "method"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(16), unique=True)
+    label = db.Column(db.String(64))
+
+
+class SpecialistMethod(db.Model):
+    """Модель связи специалиста и методов."""
+    __tablename__ = "specialist_method"
+
+    specialist_id = db.Column(
+        db.Integer, db.ForeignKey("specialist.id", ondelete="CASCADE"), primary_key=True
+    )
+    method_id = db.Column(db.Integer, db.ForeignKey("method.id"), primary_key=True)
+
+
+# SLOT (Cal.com)
+class Slot(db.Model):
+    """Модель слота для записи на сессию."""
+    __tablename__ = "slot"
+
+    id = db.Column(db.Integer, primary_key=True)
+    specialist_id = db.Column(
+        db.Integer, db.ForeignKey("specialist.id", ondelete="CASCADE")
+    )
+
+    price = db.Column(db.Float, nullable=False, server_default="1500")
+
+    start_at = db.Column(db.DateTime)
+    end_at = db.Column(db.DateTime)
+
+    external_id = db.Column(db.String)  # Cal.com ID
+    provider = db.Column(db.String, default="cal.com")
+
+    specialist = db.relationship("Specialist", back_populates="slots")
+    appointments = db.relationship("Appointment", back_populates="slot")
+
+
+# APPOINTMENT
+class AppointmentStatus(db.Model):
+    """Модель статуса записи."""
+    __tablename__ = "appointment_status"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(16), unique=True)
+    label = db.Column(db.String(32))
+
+
+class Appointment(db.Model):
+    """Модель записи клиента на слот."""
+    __tablename__ = "appointment"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    slot_id = db.Column(db.Integer, db.ForeignKey("slot.id"))
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"))
+    status_id = db.Column(db.Integer, db.ForeignKey("appointment_status.id"))
+
+    external_booking_id = db.Column(db.String)  # Cal.com booking ID
+    booking_provider = db.Column(db.String, default="cal.com")
+
+    price = db.Column(db.Float, nullable=False, server_default="1500")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    slot = db.relationship("Slot", back_populates="appointments")
+    client = db.relationship("Client", back_populates="appointments")
+    status = db.relationship("AppointmentStatus")
+
+    payment = db.relationship("Payment", uselist=False, back_populates="appointment")
+
+
+# PAYMENT (YooKassa)
+class Payment(db.Model):
+    """Модель платежа."""
+    __tablename__ = "payment"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    appointment_id = db.Column(db.Integer, db.ForeignKey("appointment.id"))
+
+    provider = db.Column(db.String(32))  # yookassa
+    provider_payment_id = db.Column(db.String, unique=True)
+
+    amount = db.Column(db.Numeric(10, 2))
+    currency = db.Column(db.String(8))
+
+    status = db.Column(db.String(32))  # pending / succeeded / canceled
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    paid_at = db.Column(db.DateTime)
+
+    appointment = db.relationship("Appointment", back_populates="payment")
+
+
+# CONSENTS
+
+
+class ConsentType(db.Model):
+    """Модель типа согласия."""
+    __tablename__ = "consent_type"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(16), unique=True)
+    label = db.Column(db.String(64))
+
+
+class Consent(db.Model):
+    """Модель согласия."""
+    __tablename__ = "consent"
+
+    id = db.Column(db.Integer, primary_key=True)
+    type_id = db.Column(db.Integer, db.ForeignKey("consent_type.id"))
+
+    version = db.Column(db.String(16))
+    content_url = db.Column(db.String)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MemberConsent(db.Model):
+    """Модель связи участника и согласия."""
+    __tablename__ = "member_consent"
+
+    member_id = db.Column(db.Integer, db.ForeignKey("member.id"), primary_key=True)
+    consent_id = db.Column(db.Integer, db.ForeignKey("consent.id"), primary_key=True)
+
+    accepted_at = db.Column(db.DateTime, default=datetime.utcnow)
